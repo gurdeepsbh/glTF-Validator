@@ -29,6 +29,7 @@
 
 library gltf.extensions.mpeg_media;
 
+import 'package:gltf/src/errors.dart';
 import 'package:gltf/src/utils.dart';
 import 'package:gltf/src/base/gltf_property.dart';
 import 'package:gltf/src/ext/extensions.dart';
@@ -78,8 +79,7 @@ const List<String> MPEG_MEDIA_ALTERNATIVE_TRACK_ITEMS = <String>[TRACK, CODECS];
 
 const Extension mpegMediaExtension =
     Extension('MPEG_media', <Type, ExtensionDescriptor>{
-  Gltf: ExtensionDescriptor(MPEGMediaObject.fromMap),
-  Node: ExtensionDescriptor(MPEGMedia.fromMap)
+  Gltf: ExtensionDescriptor(MPEGMediaObject.fromMap)
 });
 
 class MPEGMediaObject extends GltfProperty {
@@ -142,7 +142,7 @@ class MPEGMedia extends GltfProperty {
   final double startTimeOffset;
   final double endTimeOffset;
   final bool autoplay;
-  final bool autoplayGroup;
+  final int autoplayGroup;
   final bool loop;
   final bool controls;
   final SafeList<MPEGMediaAlternatives> alternatives;
@@ -172,9 +172,26 @@ class MPEGMedia extends GltfProperty {
     final startTimeOffset = getFloat(map, STARTTIMEOFFSET, context, def: 0.0);
     final endStartTime = getFloat(map, ENDTIMEOFFSET, context);
     final autoplay = getBool(map, AUTOPLAY, context);
-    final autoplaygroup = getBool(map, AUTOPLAYGROUP, context);
+    final autoplaygroup = getUint(map, AUTOPLAYGROUP, context, min: 0);
     final loop = getBool(map, LOOP, context);
     final controls = getBool(map, CONTROLS, context);
+
+    if (context.validate) {
+      if (map.containsKey(AUTOPLAYGROUP) && autoplay != true) {
+        context.addIssue(SemanticError.mpegMediaAutoplayGroupWithoutAutoplay,
+            name: AUTOPLAYGROUP);
+      }
+      if (map.containsKey(STARTTIME) && autoplay == true) {
+        context.addIssue(SemanticError.mpegMediaStartTimeWithAutoplay,
+            name: STARTTIME);
+      }
+      if (!endStartTime.isNaN &&
+          !startTimeOffset.isNaN &&
+          endStartTime <= startTimeOffset) {
+        context.addIssue(SemanticError.mpegMediaEmptyTimeRange,
+            name: ENDTIMEOFFSET, args: [startTimeOffset, endStartTime]);
+      }
+    }
 
     SafeList<MPEGMediaAlternatives> alt;
     final altMaps = getMapList(map, ALTERNATIVES, context);
